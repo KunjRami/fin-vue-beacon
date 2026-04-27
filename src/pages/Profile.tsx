@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { User, Loader2, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -17,27 +17,29 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("user_id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.display_name) setDisplayName(data.display_name);
-        setLoading(false);
-      });
+    apiClient
+      .get("/profile")
+      .then((res) => {
+        if (res.data?.display_name) setDisplayName(res.data.display_name);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_name: displayName })
-      .eq("user_id", user.id);
+    try {
+      await apiClient.put("/profile", { display_name: displayName });
+      toast({ title: "Profile updated!" });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.response?.data?.error || "Failed to update",
+        variant: "destructive",
+      });
+    }
     setSaving(false);
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else toast({ title: "Profile updated!" });
   };
 
   const exportCSV = () => {
@@ -45,7 +47,7 @@ export default function Profile() {
     Object.entries(SAMPLE_STOCKS).forEach(([symbol, { name, data }]) => {
       const last = data[data.length - 1].close;
       const prev = data[data.length - 2].close;
-      const change = ((last - prev) / prev * 100).toFixed(2);
+      const change = (((last - prev) / prev) * 100).toFixed(2);
       rows.push(`${symbol},${name},${last.toFixed(2)},${change}`);
     });
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
@@ -57,7 +59,12 @@ export default function Profile() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading)
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
 
   return (
     <div className="space-y-6 max-w-lg">
@@ -65,19 +72,28 @@ export default function Profile() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <User className="h-6 w-6 text-primary" /> Profile
         </h1>
-        <p className="text-muted-foreground text-sm">Manage your account settings</p>
+        <p className="text-muted-foreground text-sm">
+          Manage your account settings
+        </p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Account Info</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Account Info</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground">Email</label>
             <Input value={user?.email ?? ""} disabled />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground">Display Name</label>
-            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <label className="text-sm text-muted-foreground">
+              Display Name
+            </label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
           </div>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -87,7 +103,9 @@ export default function Profile() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Export Data</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Export Data</CardTitle>
+        </CardHeader>
         <CardContent>
           <Button variant="outline" onClick={exportCSV}>
             <Download className="mr-2 h-4 w-4" /> Export Market Report (CSV)

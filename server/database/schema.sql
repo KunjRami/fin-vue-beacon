@@ -1,0 +1,59 @@
+CREATE DATABASE IF NOT EXISTS findash CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE findash;
+
+CREATE TABLE IF NOT EXISTS users (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  user_id CHAR(36) NOT NULL UNIQUE,
+  display_name VARCHAR(255),
+  avatar_url VARCHAR(500),
+  theme_preference VARCHAR(20) DEFAULT 'dark',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS watchlist (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(20) NOT NULL,
+  name VARCHAR(255),
+  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_watchlist (user_id, symbol)
+);
+
+CREATE TABLE IF NOT EXISTS predictions (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(20) NOT NULL,
+  predicted_price DECIMAL(12, 4) NOT NULL,
+  actual_price DECIMAL(12, 4),
+  prediction_date DATE NOT NULL,
+  target_date DATE NOT NULL,
+  accuracy DECIMAL(5, 2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS backtesting_results (
+  id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  user_id CHAR(36) NOT NULL,
+  symbol VARCHAR(20) NOT NULL,
+  strategy VARCHAR(50) NOT NULL,
+  total_trades INT NOT NULL DEFAULT 0,
+  winning_trades INT NOT NULL DEFAULT 0,
+  profit_loss DECIMAL(12, 4) NOT NULL DEFAULT 0,
+  win_rate DECIMAL(5, 2) NOT NULL DEFAULT 0,
+  equity_curve JSON,
+  params JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+

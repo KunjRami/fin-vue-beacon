@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SAMPLE_STOCKS } from "@/lib/sampleData";
 import { Star, Plus, Trash2, Loader2 } from "lucide-react";
@@ -14,20 +14,21 @@ export default function Watchlist() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [items, setItems] = useState<{ id: string; symbol: string; name: string | null }[]>([]);
+  const [items, setItems] = useState<
+    { id: string; symbol: string; name: string | null }[]
+  >([]);
   const [newSymbol, setNewSymbol] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("watchlist")
-      .select("*")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        if (data) setItems(data);
-        setLoading(false);
-      });
+    apiClient
+      .get("/watchlist")
+      .then((res) => {
+        if (res.data) setItems(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [user]);
 
   const addStock = async () => {
@@ -42,25 +43,39 @@ export default function Watchlist() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("watchlist")
-      .insert({ user_id: user.id, symbol: sym, name: SAMPLE_STOCKS[sym].name })
-      .select()
-      .single();
-
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else if (data) {
-      setItems([...items, data]);
-      setNewSymbol("");
+    try {
+      const { data } = await apiClient.post("/watchlist", {
+        symbol: sym,
+        name: SAMPLE_STOCKS[sym].name,
+      });
+      if (data) {
+        setItems([...items, data]);
+        setNewSymbol("");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.response?.data?.error || "Failed to add",
+        variant: "destructive",
+      });
     }
   };
 
   const removeStock = async (id: string) => {
-    await supabase.from("watchlist").delete().eq("id", id);
-    setItems(items.filter((i) => i.id !== id));
+    try {
+      await apiClient.delete(`/watchlist/${id}`);
+      setItems(items.filter((i) => i.id !== id));
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+    }
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading)
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -68,7 +83,9 @@ export default function Watchlist() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Star className="h-6 w-6 text-primary" /> Watchlist
         </h1>
-        <p className="text-muted-foreground text-sm">Track your favorite stocks</p>
+        <p className="text-muted-foreground text-sm">
+          Track your favorite stocks
+        </p>
       </div>
 
       <div className="flex gap-2 max-w-md">
@@ -78,11 +95,15 @@ export default function Watchlist() {
           onChange={(e) => setNewSymbol(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addStock()}
         />
-        <Button onClick={addStock}><Plus className="h-4 w-4 mr-1" /> Add</Button>
+        <Button onClick={addStock}>
+          <Plus className="h-4 w-4 mr-1" /> Add
+        </Button>
       </div>
 
       {items.length === 0 ? (
-        <p className="text-muted-foreground py-8 text-center">Your watchlist is empty. Add stocks to get started.</p>
+        <p className="text-muted-foreground py-8 text-center">
+          Your watchlist is empty. Add stocks to get started.
+        </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((item) => {
@@ -101,9 +122,15 @@ export default function Watchlist() {
                     <p className="font-mono font-bold">{item.symbol}</p>
                     <p className="text-xs text-muted-foreground">{item.name}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="font-mono text-sm">${lastPrice.toFixed(2)}</span>
-                      <Badge variant="outline" className={`text-xs ${change >= 0 ? "text-gain border-gain/30" : "text-loss border-loss/30"}`}>
-                        {change >= 0 ? "+" : ""}{change.toFixed(2)}%
+                      <span className="font-mono text-sm">
+                        ${lastPrice.toFixed(2)}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${change >= 0 ? "text-gain border-gain/30" : "text-loss border-loss/30"}`}
+                      >
+                        {change >= 0 ? "+" : ""}
+                        {change.toFixed(2)}%
                       </Badge>
                     </div>
                   </button>
