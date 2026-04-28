@@ -28,8 +28,21 @@
     --radius: 0.75rem;
 
     --gain: 142 71% 45%;
+    --gain-foreground: 0 0% 100%;
+    --gain-muted: 142 70% 95%;
     --loss: 0 84% 60%;
+    --loss-foreground: 0 0% 100%;
+    --loss-muted: 0 70% 95%;
     --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 38 90% 95%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 217 90% 95%;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 160 80% 95%;
+
     --chart-1: 217 91% 60%;
     --chart-2: 142 71% 45%;
     --chart-3: 0 84% 60%;
@@ -67,14 +80,27 @@
     --input: 217 33% 17%;
     --ring: 217 91% 60%;
 
-    --gain: 142 71% 45%;
+    --gain: 142 71% 55%;
+    --gain-foreground: 0 0% 100%;
+    --gain-muted: 142 40% 15%;
     --loss: 0 84% 60%;
-    --warning: 38 92% 50%;
+    --loss-foreground: 0 0% 100%;
+    --loss-muted: 0 40% 15%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 38 40% 15%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 217 40% 15%;
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 160 40% 15%;
+
     --chart-1: 217 91% 60%;
-    --chart-2: 142 71% 45%;
+    --chart-2: 142 71% 55%;
     --chart-3: 0 84% 60%;
-    --chart-4: 38 92% 50%;
-    --chart-5: 262 83% 58%;
+    --chart-4: 38 92% 55%;
+    --chart-5: 262 83% 65%;
 
     --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 96%;
@@ -94,10 +120,81 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 @layer utilities {
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
   }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-md border border-border/50;
+  }
+
+  .glass-strong {
+    @apply bg-card/90 backdrop-blur-xl border border-border/60 shadow-lg;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-500;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5;
+  }
+
+  .card-lift {
+    @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10;
+  }
+
+  .stock-gain {
+    @apply text-gain bg-gain-muted border-gain/20;
+  }
+
+  .stock-loss {
+    @apply text-loss bg-loss-muted border-loss/20;
+  }
+
+  .stock-neutral {
+    @apply text-muted-foreground bg-muted border-border;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 999px;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out forwards;
+  }
+
+  .animate-stagger-1 { animation-delay: 0.05s; opacity: 0; }
+  .animate-stagger-2 { animation-delay: 0.1s; opacity: 0; }
+  .animate-stagger-3 { animation-delay: 0.15s; opacity: 0; }
+  .animate-stagger-4 { animation-delay: 0.2s; opacity: 0; }
+  .animate-stagger-5 { animation-delay: 0.25s; opacity: 0; }
+  .animate-stagger-6 { animation-delay: 0.3s; opacity: 0; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 }
+

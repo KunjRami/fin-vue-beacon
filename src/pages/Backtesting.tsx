@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { SAMPLE_STOCKS } from "@/lib/sampleData";
 import { backtestMACrossover, backtestRSI } from "@/lib/backtesting";
 import {
@@ -19,8 +18,17 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Area,
+  AreaChart,
 } from "recharts";
-import { TestTube2, Loader2 } from "lucide-react";
+import {
+  TestTube2,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  Trophy,
+  Target,
+} from "lucide-react";
 import apiClient from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -37,7 +45,7 @@ export default function Backtesting() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const runBacktest = () => {
+  const runBacktest = useCallback(() => {
     const stock = SAMPLE_STOCKS[symbol];
     if (!stock) return;
     const r =
@@ -45,9 +53,9 @@ export default function Backtesting() {
         ? backtestMACrossover(stock.data)
         : backtestRSI(stock.data);
     setResult(r);
-  };
+  }, [symbol, strategy]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!user || !result) return;
     setLoading(true);
     try {
@@ -69,10 +77,16 @@ export default function Backtesting() {
       });
     }
     setLoading(false);
-  };
+  }, [user, result, symbol, strategy, toast]);
+
+  const winRateColor =
+    result && result.winRate >= 50 ? "text-gain" : "text-loss";
+  const pnlColor = result && result.profitLoss >= 0 ? "text-gain" : "text-loss";
+  const pnlBorder =
+    result && result.profitLoss >= 0 ? "border-l-gain" : "border-l-loss";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <TestTube2 className="h-6 w-6 text-primary" /> Backtesting
@@ -84,7 +98,7 @@ export default function Backtesting() {
 
       <div className="flex flex-wrap gap-3">
         <Select value={symbol} onValueChange={setSymbol}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40 glass">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -99,7 +113,7 @@ export default function Backtesting() {
           value={strategy}
           onValueChange={(v) => setStrategy(v as "ma_crossover" | "rsi")}
         >
-          <SelectTrigger className="w-52">
+          <SelectTrigger className="w-52 glass">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -107,41 +121,73 @@ export default function Backtesting() {
             <SelectItem value="rsi">RSI Strategy</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={runBacktest}>Run Backtest</Button>
+        <Button onClick={runBacktest} className="shadow-lg shadow-primary/20">
+          <Target className="h-4 w-4 mr-1.5" /> Run Backtest
+        </Button>
       </div>
 
       {result && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Card>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-fade-in">
+            <Card className="card-hover border-l-4 border-l-primary">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Total Trades</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    Total Trades
+                  </p>
+                </div>
                 <p className="text-2xl font-bold font-mono">
                   {result.totalTrades}
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card
+              className={`card-hover border-l-4 ${result.winRate >= 50 ? "border-l-gain" : "border-l-loss"}`}
+            >
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Win Rate</p>
-                <p className="text-2xl font-bold font-mono">
+                <div className="flex items-center gap-2 mb-1">
+                  <Trophy className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    Win Rate
+                  </p>
+                </div>
+                <p className={`text-2xl font-bold font-mono ${winRateColor}`}>
                   {result.winRate.toFixed(1)}%
                 </p>
+                <div className="w-full h-1 bg-muted rounded-full mt-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${result.winRate >= 50 ? "bg-gain" : "bg-loss"}`}
+                    style={{ width: `${Math.min(result.winRate, 100)}%` }}
+                  />
+                </div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={`card-hover border-l-4 ${pnlBorder}`}>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Profit / Loss</p>
-                <p
-                  className={`text-2xl font-bold font-mono ${result.profitLoss >= 0 ? "text-gain" : "text-loss"}`}
-                >
+                <div className="flex items-center gap-2 mb-1">
+                  {result.profitLoss >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    Profit / Loss
+                  </p>
+                </div>
+                <p className={`text-2xl font-bold font-mono ${pnlColor}`}>
                   ${result.profitLoss.toFixed(2)}
                 </p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-hover border-l-4 border-l-info">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">Winning Trades</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    Winning Trades
+                  </p>
+                </div>
                 <p className="text-2xl font-bold font-mono">
                   {result.winningTrades}/{result.totalTrades}
                 </p>
@@ -149,14 +195,37 @@ export default function Backtesting() {
             </Card>
           </div>
 
-          <Card>
+          <Card className="card-hover animate-fade-in">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Equity Curve</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                Equity Curve
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer>
-                  <LineChart data={result.equityCurve}>
+                  <AreaChart data={result.equityCurve}>
+                    <defs>
+                      <linearGradient
+                        id="equityGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0.2}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="hsl(var(--border))"
@@ -177,20 +246,25 @@ export default function Backtesting() {
                         borderRadius: 8,
                       }}
                     />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="equity"
                       stroke="hsl(var(--primary))"
                       strokeWidth={2}
+                      fill="url(#equityGradient)"
                       dot={false}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
 
-          <Button onClick={handleSave} disabled={loading}>
+          <Button
+            onClick={handleSave}
+            disabled={loading}
+            className="shadow-lg shadow-primary/20"
+          >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Result
           </Button>

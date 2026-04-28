@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,13 @@ import {
   Legend,
 } from "recharts";
 import regression from "regression";
-import { BrainCircuit, Loader2 } from "lucide-react";
+import {
+  BrainCircuit,
+  Loader2,
+  Target,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react";
 import apiClient from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -35,43 +41,68 @@ export default function Prediction() {
   const stock = SAMPLE_STOCKS[symbol];
   if (!stock) return null;
 
-  const closes = stock.data.map((d) => d.close);
-  const points: [number, number][] = closes.map((c, i) => [i, c]);
-  const result = regression.linear(points);
+  const predictionData = useMemo(() => {
+    const closes = stock.data.map((d) => d.close);
+    const points: [number, number][] = closes.map((c, i) => [i, c]);
+    const result = regression.linear(points);
 
-  const predictions: {
-    date: string;
-    actual: number | null;
-    predicted: number;
-  }[] = [];
+    const predictions: {
+      date: string;
+      actual: number | null;
+      predicted: number;
+    }[] = [];
 
-  const last30 = stock.data.slice(-30);
-  const offset = closes.length - 30;
-  last30.forEach((d, i) => {
-    predictions.push({
-      date: d.date,
-      actual: d.close,
-      predicted: +result.predict(offset + i)[1].toFixed(2),
+    const last30 = stock.data.slice(-30);
+    const offset = closes.length - 30;
+    last30.forEach((d, i) => {
+      predictions.push({
+        date: d.date,
+        actual: d.close,
+        predicted: +result.predict(offset + i)[1].toFixed(2),
+      });
     });
-  });
 
-  for (let i = 1; i <= days; i++) {
-    const futureDate = new Date(stock.data[stock.data.length - 1].date);
-    futureDate.setDate(futureDate.getDate() + i);
-    if (futureDate.getDay() === 0) futureDate.setDate(futureDate.getDate() + 1);
-    if (futureDate.getDay() === 6) futureDate.setDate(futureDate.getDate() + 2);
-    predictions.push({
-      date: futureDate.toISOString().split("T")[0],
-      actual: null,
-      predicted: +result.predict(closes.length + i - 1)[1].toFixed(2),
-    });
-  }
+    for (let i = 1; i <= days; i++) {
+      const futureDate = new Date(stock.data[stock.data.length - 1].date);
+      futureDate.setDate(futureDate.getDate() + i);
+      if (futureDate.getDay() === 0)
+        futureDate.setDate(futureDate.getDate() + 1);
+      if (futureDate.getDay() === 6)
+        futureDate.setDate(futureDate.getDate() + 2);
+      predictions.push({
+        date: futureDate.toISOString().split("T")[0],
+        actual: null,
+        predicted: +result.predict(closes.length + i - 1)[1].toFixed(2),
+      });
+    }
 
-  const r2 = result.r2;
-  const accuracy = Math.max(0, Math.min(100, r2 * 100));
-  const nextDayPrediction = result.predict(closes.length)[1];
+    const r2 = result.r2;
+    const accuracy = Math.max(0, Math.min(100, r2 * 100));
+    const nextDayPrediction = result.predict(closes.length)[1];
+    const lastPrice = closes[closes.length - 1];
+    const priceChange = ((nextDayPrediction - lastPrice) / lastPrice) * 100;
 
-  const handleSave = async () => {
+    return {
+      predictions,
+      r2,
+      accuracy,
+      nextDayPrediction,
+      lastPrice,
+      priceChange,
+    };
+  }, [stock, days, symbol]);
+
+  const {
+    predictions,
+    r2,
+    accuracy,
+    nextDayPrediction,
+    lastPrice,
+    priceChange,
+  } = predictionData;
+  const isPredictedGain = priceChange >= 0;
+
+  const handleSave = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const today = new Date().toISOString().split("T")[0];
@@ -94,10 +125,29 @@ export default function Prediction() {
       });
     }
     setLoading(false);
-  };
+  }, [user, symbol, nextDayPrediction, accuracy, predictions, toast]);
+
+  const accuracyColor =
+    accuracy >= 70
+      ? "text-gain"
+      : accuracy >= 40
+        ? "text-warning"
+        : "text-loss";
+  const accuracyBg =
+    accuracy >= 70
+      ? "bg-gain-muted"
+      : accuracy >= 40
+        ? "bg-warning-muted"
+        : "bg-loss-muted";
+  const accuracyBorder =
+    accuracy >= 70
+      ? "border-l-gain"
+      : accuracy >= 40
+        ? "border-l-warning"
+        : "border-l-loss";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -109,7 +159,7 @@ export default function Prediction() {
         </div>
         <div className="flex gap-2">
           <Select value={symbol} onValueChange={setSymbol}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-40 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -124,7 +174,7 @@ export default function Prediction() {
             value={String(days)}
             onValueChange={(v) => setDays(Number(v))}
           >
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="w-28 glass">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -139,33 +189,65 @@ export default function Prediction() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
+        <Card
+          className={`card-hover border-l-4 ${isPredictedGain ? "border-l-gain" : "border-l-loss"}`}
+        >
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Next Day Prediction</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                Next Day Prediction
+              </p>
+            </div>
             <p className="text-2xl font-bold font-mono">
               ${nextDayPrediction.toFixed(2)}
             </p>
+            <p
+              className={`text-xs font-semibold mt-1 ${isPredictedGain ? "text-gain" : "text-loss"}`}
+            >
+              {isPredictedGain ? (
+                <TrendingUp className="h-3 w-3 inline mr-0.5" />
+              ) : (
+                <TrendingDown className="h-3 w-3 inline mr-0.5" />
+              )}
+              {isPredictedGain ? "+" : ""}
+              {priceChange.toFixed(2)}% vs current
+            </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="card-hover border-l-4 border-l-info">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">R² Score</p>
-            <p className="text-2xl font-bold font-mono">{r2.toFixed(4)}</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              R² Score
+            </p>
+            <p className="text-2xl font-bold font-mono mt-1">{r2.toFixed(4)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Coefficient of determination
+            </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`card-hover border-l-4 ${accuracyBorder}`}>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Model Accuracy</p>
-            <p className="text-2xl font-bold font-mono">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+              Model Accuracy
+            </p>
+            <p className={`text-2xl font-bold font-mono mt-1 ${accuracyColor}`}>
               {accuracy.toFixed(1)}%
             </p>
+            <div className="w-full h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${accuracy >= 70 ? "bg-gain" : accuracy >= 40 ? "bg-warning" : "bg-loss"}`}
+                style={{ width: `${accuracy}%` }}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="card-hover">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary" />
             Predicted vs Actual — {symbol}
           </CardTitle>
         </CardHeader>
@@ -199,14 +281,14 @@ export default function Prediction() {
                   type="monotone"
                   dataKey="actual"
                   stroke="hsl(var(--primary))"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   dot={false}
                   name="Actual"
                 />
                 <Line
                   type="monotone"
                   dataKey="predicted"
-                  stroke="hsl(var(--chart-4))"
+                  stroke="hsl(var(--warning))"
                   strokeWidth={2}
                   dot={false}
                   strokeDasharray="5 5"
@@ -218,7 +300,11 @@ export default function Prediction() {
         </CardContent>
       </Card>
 
-      <Button onClick={handleSave} disabled={loading}>
+      <Button
+        onClick={handleSave}
+        disabled={loading}
+        className="shadow-lg shadow-primary/20"
+      >
         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Save Prediction
       </Button>
